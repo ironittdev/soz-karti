@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Söz Kartı</title>
+<meta name="theme-color" content="#100F14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23100F14'/%3E%3Crect x='14' y='20' width='36' height='6' rx='3' fill='%23FF6A3D'/%3E%3Crect x='14' y='32' width='28' height='6' rx='3' fill='%23EDEBF2'/%3E%3Crect x='14' y='44' width='20' height='6' rx='3' fill='%23EDEBF2'/%3E%3C/svg%3E">
+<link rel="manifest" href='data:application/manifest+json,{"name":"Söz Kartı","short_name":"Söz Kartı","start_url":".","display":"standalone","background_color":"%23100F14","theme_color":"%23100F14"}'>
+<style>
+  :root{
+    --ink:#100F14;
+    --surface:#1A1922;
+    --line:#2A2833;
+    --text:#EDEBF2;
+    --muted:#8E8AA0;
+    --accent:#FF6A3D;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:20px 16px 64px;
+  }
+  .wrap{max-width:520px;margin:0 auto}
+  header{margin-bottom:22px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent);font-weight:700;margin-bottom:6px;
+  }
+  h1{font-size:26px;line-height:1.1;margin:0;font-weight:800;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13px;margin-top:8px}
+
+  .stage{
+    background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    padding:12px;margin-bottom:18px;
+  }
+  canvas{width:100%;height:auto;display:block;border-radius:10px}
+
+  .field{margin-bottom:14px}
+  label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  input[type=text],input[type=url],textarea{
+    width:100%;background:var(--surface);border:1px solid var(--line);
+    color:var(--text);border-radius:10px;padding:11px 12px;font:inherit;
+    -webkit-appearance:none;appearance:none;
+    transition:border-color .18s ease, background-color .18s ease;
+  }
+  textarea{resize:vertical;min-height:110px;line-height:1.5}
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus{
+    -webkit-text-fill-color:var(--text);
+    -webkit-box-shadow:0 0 0 1000px var(--surface) inset;
+    box-shadow:0 0 0 1000px var(--surface) inset;
+    caret-color:var(--text);
+  }
+  input:focus,textarea:focus,button:focus-visible,select:focus{
+    outline:2px solid var(--accent);outline-offset:2px;border-color:transparent
+  }
+  .row{display:flex;gap:10px}
+  .row>*{flex:1;min-width:0}
+
+  .segs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:4px}
+  .segs button{
+    flex:1;background:transparent;border:0;color:var(--muted);font:600 13px/1 inherit;
+    padding:9px 4px;border-radius:7px;cursor:pointer;
+    transition:background-color .22s cubic-bezier(.2,.7,.3,1),
+               color .22s ease, transform .12s ease;
+  }
+  .segs button:active{transform:scale(.96)}
+  .segs button[aria-pressed=true]{background:var(--accent);color:#160C06}
+
+  .filewrap{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:12px;
+  }
+  .filewrap input[type=file]{
+    width:100%;color:var(--muted);font:inherit;font-size:14px;
+  }
+  .filewrap input[type=file]::file-selector-button{
+    background:var(--line);color:var(--text);border:0;border-radius:8px;
+    padding:10px 14px;margin-right:12px;font:700 14px/1 inherit;
+    transition:background-color .18s ease;
+  }
+  .hint{color:var(--muted);font-size:12px;margin:8px 2px 0}
+  .filewrap.drag{border-color:var(--accent)}
+  input[type=color]{
+    width:100%;height:44px;background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:4px;cursor:pointer
+  }
+
+  .go{
+    width:100%;margin-top:6px;background:var(--accent);color:#160C06;border:0;
+    border-radius:12px;padding:15px;font:800 16px/1 inherit;cursor:pointer;
+    letter-spacing:-.01em;
+    transition:transform .12s ease, opacity .18s ease, background-color .18s ease;
+  }
+  .go:active{transform:scale(.985)}
+  .go.ghost{background:transparent;color:var(--text);border:1px solid var(--line);
+    font-weight:700;margin-top:10px}
+  .copy2{background:transparent;border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:0 16px;font:700 14px/1 inherit;white-space:nowrap;cursor:pointer}
+  .copy2.done{border-color:var(--accent);color:var(--accent)}
+  .lines{max-height:300px;overflow-y:auto;background:var(--surface);
+    border:1px solid var(--line);border-radius:11px;padding:6px}
+  .lines button{display:block;width:100%;text-align:left;background:transparent;
+    border:0;border-radius:8px;color:var(--text);font:400 15px/1.35 inherit;
+    padding:10px 11px;cursor:pointer;
+    transition:background-color .2s ease, color .2s ease, transform .12s ease}
+  .lines button:active{transform:scale(.99)}
+  .lines button+button{margin-top:2px}
+  .lines button[data-on="1"]{background:var(--accent);color:#160C06;font-weight:700}
+
+  .out{margin-top:18px;display:none}
+  .out img{width:100%;border-radius:12px;display:block;border:1px solid var(--line)}
+  .out p{color:var(--muted);font-size:13px;margin:10px 0 12px}
+  .dl{display:block;text-align:center;background:transparent;color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:12px;
+    text-decoration:none;font-weight:700}
+  @media (prefers-reduced-motion:no-preference){
+    .out{animation:rise .25s ease-out}
+    @keyframes rise{from{opacity:0;transform:translateY(8px)}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Söz kartı</div>
+    <h1>Sözü olmayan şarkı için kart üret</h1>
+    <p class="sub">Sözü sen yaz, kapağı yükle, PNG olarak indir. Arka plan rengi kapaktan çıkar.</p>
+  </header>
+
+  <div class="stage"><canvas id="cv" width="1080" height="1080"></canvas></div>
+
+  <div class="field">
+    <label for="lyric">Söz satırları</label>
+    <textarea id="lyric" placeholder="Her satırı alt alta yaz.&#10;3-5 satır en iyi duruyor."></textarea>
+  </div>
+
+  <div class="row field">
+    <div>
+      <label for="title">Şarkı</label>
+      <input type="text" id="title" placeholder="Şarkı adı">
+    </div>
+    <div>
+      <label for="artist">Sanatçı</label>
+      <input type="text" id="artist" placeholder="Sanatçı">
+    </div>
+  </div>
+
+  <button class="go ghost" id="findLyric" style="margin:0 0 8px">Söz ve kapağı ara</button>
+  <p class="hint" id="findMsg" style="margin:0 2px 16px">Şarkı ve sanatçı adını yaz; sözü LRCLIB'den, kapağı iTunes'tan çeksin.</p>
+
+  <div class="field" id="linesWrap" style="display:none">
+    <label>Satıra dokun, karta eklensin</label>
+    <div id="lines" class="lines"></div>
+  </div>
+
+  <div class="field">
+    <label>Kapak</label>
+    <div class="filewrap" id="fileWrap">
+      <input type="file" id="cover" accept="image/*">
+    </div>
+    <p class="hint" id="fileLabel">Seçilmedi &middot; sürükleyebilir ya da yapıştırabilirsin</p>
+  </div>
+
+  <div class="field">
+    <label for="slink">Şarkı linki (opsiyonel)</label>
+    <input type="url" id="slink" placeholder="Spotify, YT Music, Apple Music…" inputmode="url">
+  </div>
+
+  <div class="field">
+    <label>Boyut</label>
+    <div class="segs" id="fmt">
+      <button type="button" data-v="square" aria-pressed="true">Kare</button>
+      <button type="button" data-v="story" aria-pressed="false">Story 9:16</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Renk</label>
+    <div class="segs" id="mode">
+      <button type="button" data-v="auto" aria-pressed="true">Kapaktan</button>
+      <button type="button" data-v="dark" aria-pressed="false">Siyah</button>
+      <button type="button" data-v="custom" aria-pressed="false">Seç</button>
+    </div>
+  </div>
+
+  <div class="field" id="pickWrap" style="display:none">
+    <label for="pick">Arka plan rengi</label>
+    <input type="color" id="pick" value="#1E5B47">
+  </div>
+
+  <button class="go" id="share">Paylaş</button>
+  <div id="linkWrap" style="display:none;margin-top:12px">
+    <p class="hint" style="margin:0 2px 8px">Görseli gönderdikten sonra linki yapıştır. Kopyalanmadıysa aşağıdan al.</p>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="linkOut" readonly style="flex:1;min-width:0;font-size:13px">
+      <button class="copy2" id="copyLink">Kopyala</button>
+    </div>
+  </div>
+  <button class="go ghost" id="go">PNG üret</button>
+
+  <div class="out" id="out">
+    <p>Görsele basılı tut → kaydet, ya da aşağıdan indir.</p>
+    <img id="outImg" alt="Üretilen söz kartı">
+    <a class="dl" id="dl" download="soz-karti.png" href="#">İndir</a>
+  </div>
+</div>
+
+<script>
+(function(){
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const FONT = 'system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
+
+  let state = {
+    lyric: '',
+    title: '',
+    artist: '',
+    img: null,
+    fmt: 'square',
+    mode: 'auto',
+    pick: '#1E5B47'
+  };
+
+  /* ---------- helpers ---------- */
+  function hexToRgb(h){
+    h = h.replace('#','');
+    return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+  }
+  function lum(r,g,b){ return (0.299*r + 0.587*g + 0.114*b)/255; }
+
+  function dominant(img){
+    const s = document.createElement('canvas');
+    s.width = s.height = 40;
+    const c = s.getContext('2d', {willReadFrequently:true});
+    c.drawImage(img,0,0,40,40);
+    let d;
+    try { d = c.getImageData(0,0,40,40).data; } catch(e){ return [30,30,36]; }
+    let R=0,G=0,B=0,W=0;
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i],g=d[i+1],b=d[i+2];
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      const sat=mx===0?0:(mx-mn)/mx;
+      const w = 0.25 + sat*1.6;           // renkli pikselleri öne al
+      R+=r*w; G+=g*w; B+=b*w; W+=w;
+    }
+    let out=[R/W,G/W,B/W];
+    // çok açık ya da çok koyuysa okunur aralığa çek
+    const L = lum(out[0],out[1],out[2]);
+    const target = L > 0.62 ? 0.45/L : (L < 0.10 ? 0.16/Math.max(L,0.02) : 0.72/Math.max(L,0.02)*0.9);
+    const k = L>0.62 ? target : (L<0.10 ? target : 1);
+    return out.map(v=>Math.max(6,Math.min(235, v*k)));
+  }
+
+  function rr(c,x,y,w,h,r){
+    if(c.roundRect){ c.beginPath(); c.roundRect(x,y,w,h,r); return; }
+    c.beginPath();
+    c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+    c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+  }
+
+  function wrap(c,text,maxW){
+    const out=[];
+    text.split('\n').forEach(function(para){
+      const p = para.trim();
+      if(!p){ out.push(''); return; }
+      const words = p.split(/\s+/);
+      let line = words[0];
+      for(let i=1;i<words.length;i++){
+        const t = line+' '+words[i];
+        if(c.measureText(t).width > maxW){ out.push(line); line = words[i]; }
+        else line = t;
+      }
+      out.push(line);
+    });
+    return out;
+  }
+
+  /* ---------- draw ---------- */
+  function draw(){
+    const story = state.fmt === 'story';
+    const W = 1080, H = story ? 1920 : 1080;
+    cv.width = W; cv.height = H;
+
+    // arka plan
+    let bg;
+    if(state.mode === 'dark') bg = [17,17,20];
+    else if(state.mode === 'custom') bg = hexToRgb(state.pick);
+    else bg = state.img ? dominant(state.img) : [30,44,40];
+
+    const bgc = 'rgb('+bg.map(Math.round).join(',')+')';
+    ctx.fillStyle = bgc; ctx.fillRect(0,0,W,H);
+
+    // yumuşak ışık
+    const g = ctx.createRadialGradient(W*0.22, H*0.16, 10, W*0.22, H*0.16, W*1.05);
+    g.addColorStop(0,'rgba(255,255,255,0.13)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+    const dark = lum(bg[0],bg[1],bg[2]) < 0.55;
+    const fg = dark ? '#FFFFFF' : '#0D0D10';
+    const softFg = dark ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.55)';
+
+    const pad = story ? 100 : 88;
+    const maxW = W - pad*2;
+    const footH = story ? 190 : 170;
+
+    // söz metni — kutuya sığana kadar küçült
+    const topY = story ? 340 : 230;
+    const boxH = H - topY - footH - pad;
+    let size = story ? 108 : 92;
+    let lines, lh;
+    while(size > 26){
+      ctx.font = '800 '+size+'px '+FONT;
+      lines = wrap(ctx, state.lyric || ' ', maxW);
+      lh = size * 1.18;
+      if(lines.length * lh <= boxH) break;
+      size -= 3;
+    }
+    ctx.font = '800 '+size+'px '+FONT;
+    ctx.fillStyle = fg;
+    ctx.textBaseline = 'top';
+    ctx.letterSpacing && (ctx.letterSpacing = '-1px');
+    let y = topY + Math.max(0, (boxH - lines.length*lh) * (story ? 0.5 : 0));
+    lines.forEach(function(l){ ctx.fillText(l, pad, y); y += lh; });
+    ctx.letterSpacing && (ctx.letterSpacing = '0px');
+
+    // alt bilgi
+    const fy = H - pad - (story ? 118 : 104);
+    const cs = story ? 118 : 104;
+    if(state.img){
+      ctx.save();
+      rr(ctx, pad, fy, cs, cs, 14); ctx.clip();
+      const im = state.img, r = Math.max(cs/im.width, cs/im.height);
+      const w = im.width*r, h = im.height*r;
+      ctx.drawImage(im, pad+(cs-w)/2, fy+(cs-h)/2, w, h);
+      ctx.restore();
+    }
+
+    const tx = state.img ? pad + cs + 30 : pad;
+    ctx.fillStyle = fg;
+    ctx.font = '800 '+(story?46:42)+'px '+FONT;
+    let t = state.title || '';
+    while(ctx.measureText(t).width > W - tx - pad && t.length > 4) t = t.slice(0,-2);
+    if(t !== (state.title||'')) t = t.trim()+'…';
+    ctx.fillText(t, tx, fy + (story?18:14));
+
+    ctx.fillStyle = softFg;
+    ctx.font = '600 '+(story?38:34)+'px '+FONT;
+    ctx.fillText(state.artist || '', tx, fy + (story?78:66));
+  }
+
+  /* ---------- events ---------- */
+  const $ = function(id){ return document.getElementById(id); };
+
+  $('lyric').value = state.lyric;
+  $('title').value = state.title;
+  $('artist').value = state.artist;
+
+  ['lyric','title','artist'].forEach(function(k){
+    $(k).addEventListener('input', function(e){ state[k] = e.target.value; draw(); });
+  });
+
+  function loadCover(file){
+    if(!file || !/^image\//.test(file.type)){
+      $('fileLabel').textContent = 'Bu bir görsel değil, başka dosya dene';
+      return;
+    }
+    const fr = new FileReader();
+    fr.onload = function(){
+      const im = new Image();
+      im.onload = function(){
+        state.img = im;
+        const n = file.name || 'kapak';
+        $('fileLabel').textContent = 'Yüklendi: ' + (n.length > 26 ? n.slice(0,24)+'…' : n);
+        draw();
+      };
+      im.onerror = function(){ $('fileLabel').textContent = 'Görsel açılmadı, başka dosya dene'; };
+      im.src = fr.result;
+    };
+    fr.onerror = function(){ $('fileLabel').textContent = 'Dosya okunamadı, tekrar dene'; };
+    fr.readAsDataURL(file);
+  }
+
+  $('cover').addEventListener('change', function(e){ loadCover(e.target.files[0]); });
+
+  const fw = $('fileWrap');
+  ['dragenter','dragover'].forEach(function(ev){
+    fw.addEventListener(ev, function(e){ e.preventDefault(); fw.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    fw.addEventListener(ev, function(e){ e.preventDefault(); fw.classList.remove('drag'); });
+  });
+  fw.addEventListener('drop', function(e){
+    if(e.dataTransfer && e.dataTransfer.files[0]) loadCover(e.dataTransfer.files[0]);
+  });
+
+  document.addEventListener('paste', function(e){
+    const items = (e.clipboardData || {}).items || [];
+    for(let i=0;i<items.length;i++){
+      if(items[i].type.indexOf('image') === 0){ loadCover(items[i].getAsFile()); break; }
+    }
+  });
+
+  function seg(id, key, after){
+    $(id).addEventListener('click', function(e){
+      const b = e.target.closest('button'); if(!b) return;
+      [].forEach.call(this.querySelectorAll('button'), function(x){
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      state[key] = b.dataset.v;
+      if(after) after();
+      draw();
+    });
+  }
+  seg('fmt','fmt');
+  seg('mode','mode', function(){
+    $('pickWrap').style.display = state.mode === 'custom' ? 'block' : 'none';
+  });
+  $('pick').addEventListener('input', function(e){ state.pick = e.target.value; draw(); });
+
+  function shareText(){
+    const lyric = ($('lyric').value || '').trim();
+    const link = $('slink').value.trim();
+    let t = lyric;
+    if(link) t += (t ? '\n\n' : '') + link;
+    return t;
+  }
+
+  function copyText(txt){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).catch(fallback);
+    } else fallback();
+
+    function fallback(){
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select(); ta.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch(e){}
+    }
+  }
+
+  function makeBlob(cb){
+    draw();
+    if(cv.toBlob) cv.toBlob(function(b){ cb(b); }, 'image/png');
+    else {
+      try {
+        const parts = cv.toDataURL('image/png').split(',');
+        const bin = atob(parts[1]);
+        const arr = new Uint8Array(bin.length);
+        for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+        cb(new Blob([arr], {type:'image/png'}));
+      } catch(e){ cb(null); }
+    }
+  }
+
+  $('share').addEventListener('click', function(){
+    const btn = this;
+    makeBlob(function(blob){
+      if(!blob){ btn.textContent = 'Görsel üretilemedi'; return; }
+      const file = new File([blob], 'soz-karti.png', {type:'image/png'});
+      const link = $('slink').value.trim();
+      const data = {files:[file]};
+      if(link) data.text = link;
+
+      // Android gorsel + metni birlikte gondermiyor, linki panoya al
+      if(link){
+        copyText(link);
+        $('linkOut').value = link;
+        $('linkWrap').style.display = 'block';
+      }
+
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        navigator.share(data).catch(function(){});
+      } else if(navigator.share){
+        navigator.share({text: shareText()}).catch(function(){});
+      } else {
+        $('go').click();
+        copyText(shareText());
+        $('linkOut').value = shareText().replace(/\n/g, ' | ');
+        $('linkWrap').style.display = 'block';
+        btn.textContent = 'Panoya kopyalandı — PNG aşağıda';
+      }
+    });
+  });
+
+  // --- kapak otomatik bulma (iTunes, anahtarsiz, JSONP) ---
+  function findCover(track, artist, done){
+    const cb = 'itcb' + Date.now();
+    const s = document.createElement('script');
+    let finished = false;
+
+    function finish(url){
+      if(finished) return;
+      finished = true;
+      try { delete window[cb]; } catch(e){ window[cb] = undefined; }
+      if(s.parentNode) s.parentNode.removeChild(s);
+      done(url);
+    }
+
+    window[cb] = function(data){
+      const r = (data && data.results && data.results[0]) || null;
+      if(!r){ finish(null); return; }
+      finish({
+        cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.') : null,
+        artist: r.artistName || '',
+        track: r.trackName || ''
+      });
+    };
+
+    s.onerror = function(){ finish(null); };
+    s.src = 'https://itunes.apple.com/search?term='
+      + encodeURIComponent((artist ? artist + ' ' : '') + track)
+      + '&entity=song&limit=1&callback=' + cb;
+    document.head.appendChild(s);
+    setTimeout(function(){ finish(null); }, 8000);
+  }
+
+  function applyCover(url, msgEl){
+    // crossOrigin sart: yoksa canvas kirlenir ve PNG uretilemez
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = function(){
+      state.img = im;
+      $('fileLabel').textContent = 'Kapak otomatik bulundu';
+      draw();
+      // PNG uretilebiliyor mu, hemen dogrula
+      try { cv.toDataURL('image/png'); }
+      catch(e){
+        state.img = null;
+        $('fileLabel').textContent = 'Kapak indirilemedi, elle yükle';
+        draw();
+      }
+    };
+    im.onerror = function(){
+      if(msgEl) msgEl.textContent += ' · kapak bulunamadı';
+    };
+    im.src = url;
+  }
+
+  // --- LRCLIB soz arama ---
+  let picked = [];
+
+  function renderLines(arr){
+    const box = $('lines');
+    box.innerHTML = '';
+    arr.forEach(function(line, idx){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = line;
+      b.addEventListener('click', function(){
+        const i = picked.indexOf(idx);
+        if(i > -1){ picked.splice(i, 1); b.dataset.on = '0'; }
+        else { picked.push(idx); b.dataset.on = '1'; }
+        // sarkidaki sirayi koru, dokunma sirasini degil
+        picked.sort(function(a, c){ return a - c; });
+        state.lyric = picked.map(function(n){ return arr[n]; }).join('\n');
+        $('lyric').value = state.lyric;
+        draw();
+      });
+      box.appendChild(b);
+    });
+    $('linesWrap').style.display = arr.length ? 'block' : 'none';
+  }
+
+  $('findLyric').addEventListener('click', function(){
+    const btn = this, msg = $('findMsg');
+    const track = $('title').value.trim();
+    const artist = $('artist').value.trim();
+
+    if(!track){ msg.textContent = 'Önce şarkı adını yaz.'; return; }
+
+    btn.disabled = true;
+    msg.textContent = 'Aranıyor…';
+
+    if(!state.img){
+      findCover(track, artist, function(res){
+        if(!res) return;
+
+        // sanatci bos ise otomatik doldur
+        if(!$('artist').value.trim() && res.artist){
+          $('artist').value = res.artist;
+          state.artist = res.artist;
+          draw();
+        }
+        // sarki adini da servisteki resmi yazimla duzelt
+        if(res.track){
+          $('title').value = res.track;
+          state.title = res.track;
+          draw();
+        }
+        if(res.cover) applyCover(res.cover, msg);
+      });
+    }
+
+    const q = 'https://lrclib.net/api/search?track_name=' + encodeURIComponent(track)
+      + (artist ? '&artist_name=' + encodeURIComponent(artist) : '');
+
+    fetch(q)
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(list){
+        btn.disabled = false;
+        if(!list || !list.length){
+          msg.textContent = 'Bulunamadı — sözü elle yazman gerekiyor.';
+          $('linesWrap').style.display = 'none';
+          return;
+        }
+        const hit = list.find(function(x){ return x.plainLyrics; });
+        if(!hit){
+          msg.textContent = 'Kayıt var ama sözü yok. Elle yaz.';
+          $('linesWrap').style.display = 'none';
+          return;
+        }
+        const arr = hit.plainLyrics.split('\n')
+          .map(function(s){ return s.trim(); })
+          .filter(Boolean);
+        picked = [];
+        renderLines(arr);
+        msg.textContent = hit.artistName + ' — ' + hit.trackName + ' · ' + arr.length + ' satır';
+      })
+      .catch(function(){
+        btn.disabled = false;
+        msg.textContent = 'Bağlanamadı. İnternet yoksa ya da servis kapalıysa elle yaz.';
+      });
+  });
+
+  $('copyLink').addEventListener('click', function(){
+    const btn = this;
+    copyText($('linkOut').value);
+    btn.textContent = 'Kopyalandı';
+    btn.classList.add('done');
+    setTimeout(function(){ btn.textContent = 'Kopyala'; btn.classList.remove('done'); }, 1800);
+  });
+
+  $('go').addEventListener('click', function(){
+    draw();
+    let url;
+    try { url = cv.toDataURL('image/png'); }
+    catch(err){ $('out').querySelector('p').textContent = 'Görsel üretilemedi, kapağı tekrar yükle.'; $('out').style.display='block'; return; }
+    $('outImg').src = url;
+    $('dl').href = url;
+    $('out').style.display = 'block';
+    $('out').scrollIntoView({behavior:'smooth', block:'start'});
+  });
+
+  // indirme engellenirse yeni sekmede aç
+  $('dl').addEventListener('click', function(e){
+    const href = this.getAttribute('href');
+    if(!href || href === '#') return;
+    setTimeout(function(){
+      try { window.open(href, '_blank'); } catch(err){}
+    }, 400);
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>

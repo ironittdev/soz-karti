@@ -117,6 +117,14 @@
   .lines button:active{transform:scale(.99)}
   .lines button+button{margin-top:2px}
   .lines button[data-on="1"]{background:var(--accent);color:#160C06;font-weight:700}
+  .hit{display:flex !important;align-items:center;gap:11px}
+  .hit img,.hit .ph{width:40px;height:40px;border-radius:6px;flex:none;
+    background:var(--line);object-fit:cover}
+  .hit .tx{display:flex;flex-direction:column;min-width:0;text-align:left}
+  .hit b{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+  .hit i{font-style:normal;font-size:12px;opacity:.62;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
 
   .out{margin-top:18px;display:none}
   .out img{width:100%;border-radius:12px;display:block;border:1px solid var(--line)}
@@ -156,8 +164,13 @@
     </div>
   </div>
 
-  <button class="go ghost" id="findLyric" style="margin:0 0 8px">Söz ve kapağı ara</button>
-  <p class="hint" id="findMsg" style="margin:0 2px 16px">Şarkı ve sanatçı adını yaz; sözü LRCLIB'den, kapağı iTunes'tan çeksin.</p>
+  <button class="go ghost" id="findLyric" style="margin:0 0 8px">Şarkıyı ara</button>
+  <p class="hint" id="findMsg" style="margin:0 2px 16px">Şarkı adının bir kısmı yeter. Sonuçtan seçince kapak, link ve söz gelir.</p>
+
+  <div class="field" id="hitsWrap" style="display:none">
+    <label>Sonuçlar — birini seç</label>
+    <div id="hits" class="lines"></div>
+  </div>
 
   <div class="field" id="linesWrap" style="display:none">
     <label>Satıra dokun, karta eklensin</label>
@@ -500,74 +513,75 @@
     });
   });
 
-  // --- kapak otomatik bulma (iTunes, anahtarsiz, JSONP) ---
-  function findCover(track, artist, done){
+  // --- iTunes arama (anahtarsiz, JSONP) ---
+  let hits = [];
+
+  function itunesSearch(term, done){
     const cb = 'itcb' + Date.now();
     const s = document.createElement('script');
     let finished = false;
 
-    function finish(url){
+    function finish(list){
       if(finished) return;
       finished = true;
       try { delete window[cb]; } catch(e){ window[cb] = undefined; }
       if(s.parentNode) s.parentNode.removeChild(s);
-      done(url);
+      done(list);
     }
 
-    window[cb] = function(data){
-      const r = (data && data.results && data.results[0]) || null;
-      if(!r){ finish(null); return; }
-      finish({
-        cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.') : null,
-        artist: r.artistName || '',
-        track: r.trackName || '',
-        id: r.trackId || null
-      });
-    };
-
-    s.onerror = function(){ finish(null); };
-    s.src = 'https://itunes.apple.com/search?term='
-      + encodeURIComponent((artist ? artist + ' ' : '') + track)
-      + '&entity=song&limit=1&callback=' + cb;
+    window[cb] = function(data){ finish((data && data.results) || []); };
+    s.onerror = function(){ finish([]); };
+    s.src = 'https://itunes.apple.com/search?term=' + encodeURIComponent(term)
+      + '&entity=song&limit=8&callback=' + cb;
     document.head.appendChild(s);
-    setTimeout(function(){ finish(null); }, 8000);
+    setTimeout(function(){ finish([]); }, 8000);
   }
 
-  // --- sarki linki bulma: once Spotify, sonra YouTube Music ---
-  function findLink(id, track, artist){
-    const box = $('slink');
-    if(box.value.trim()) return;             // elle girdiyse dokunma
+  function renderHits(list){
+    const box = $('hits');
+    box.innerHTML = '';
+    list.forEach(function(r, i){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hit';
+      const art = (r.artworkUrl100 || '').replace(/\/\d+x\d+bb\./, '/100x100bb.');
+      b.innerHTML = (art ? '<img src="' + art + '" alt="">' : '<span class="ph"></span>')
+        + '<span class="tx"><b></b><i></i></span>';
+      b.querySelector('b').textContent = r.trackName || '';
+      b.querySelector('i').textContent = r.artistName || '';
+      b.addEventListener('click', function(){
+        [].forEach.call(box.children, function(x){ x.dataset.on = '0'; });
+        b.dataset.on = '1';
+        pickHit(r);
+      });
+      box.appendChild(b);
+    });
+    $('hitsWrap').style.display = list.length ? 'block' : 'none';
+  }
 
-    function fallback(){
-      box.value = 'https://open.spotify.com/search/'
-        + encodeURIComponent((artist ? artist + ' ' : '') + track);
+  function pickHit(r){
+    $('title').value = r.trackName || '';
+    $('artist').value = r.artistName || '';
+    state.title = $('title').value;
+    state.artist = $('artist').value;
+    draw();
+
+    if(r.artworkUrl100){
+      applyCover(r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.'));
     }
-
-    if(!id){ fallback(); return; }
-
-    fetch('https://api.song.link/v1-alpha.1/links?platform=itunes&type=song&id='
-          + encodeURIComponent(id) + '&userCountry=TR')
-      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
-      .then(function(d){
-        const p = (d && d.linksByPlatform) || {};
-        const url = (p.spotify && p.spotify.url)
-                 || (p.youtubeMusic && p.youtubeMusic.url)
-                 || null;
-        if(url) box.value = url;
-        else fallback();
-      })
-      .catch(fallback);
+    findLink(r.trackViewUrl, r.trackName, r.artistName);
+    loadLyrics(r.trackName, r.artistName);
   }
 
-  function applyCover(url, msgEl){
+  // --- kapak ---
+  function applyCover(url){
     // crossOrigin sart: yoksa canvas kirlenir ve PNG uretilemez
     const im = new Image();
     im.crossOrigin = 'anonymous';
     im.onload = function(){
       state.img = im;
-      $('fileLabel').textContent = 'Kapak otomatik bulundu';
+      $('fileLabel').textContent = 'Kapak otomatik geldi';
       draw();
-      // PNG uretilebiliyor mu, hemen dogrula
       try { cv.toDataURL('image/png'); }
       catch(e){
         state.img = null;
@@ -576,17 +590,42 @@
       }
     };
     im.onerror = function(){
-      if(msgEl) msgEl.textContent += ' · kapak bulunamadı';
+      $('fileLabel').textContent = 'Kapak alınamadı, elle yükle';
     };
     im.src = url;
   }
 
-  // --- LRCLIB soz arama ---
+  // --- sarki linki: once Spotify, sonra YouTube Music ---
+  function findLink(appleUrl, track, artist){
+    const box = $('slink');
+
+    function fallback(){
+      box.value = 'https://open.spotify.com/search/'
+        + encodeURIComponent((artist ? artist + ' ' : '') + (track || ''));
+    }
+
+    if(!appleUrl){ fallback(); return; }
+
+    fetch('https://api.song.link/v1-alpha.1/links?url='
+          + encodeURIComponent(appleUrl) + '&userCountry=TR')
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d){
+        const p = (d && d.linksByPlatform) || {};
+        const url = (p.spotify && p.spotify.url)
+                 || (p.youtubeMusic && p.youtubeMusic.url)
+                 || null;
+        if(url) box.value = url; else fallback();
+      })
+      .catch(fallback);
+  }
+
+  // --- LRCLIB soz ---
   let picked = [];
 
   function renderLines(arr){
     const box = $('lines');
     box.innerHTML = '';
+    picked = [];
     arr.forEach(function(line, idx){
       const b = document.createElement('button');
       b.type = 'button';
@@ -595,7 +634,6 @@
         const i = picked.indexOf(idx);
         if(i > -1){ picked.splice(i, 1); b.dataset.on = '0'; }
         else { picked.push(idx); b.dataset.on = '1'; }
-        // sarkidaki sirayi koru, dokunma sirasini degil
         picked.sort(function(a, c){ return a - c; });
         state.lyric = picked.map(function(n){ return arr[n]; }).join('\n');
         $('lyric').value = state.lyric;
@@ -606,66 +644,54 @@
     $('linesWrap').style.display = arr.length ? 'block' : 'none';
   }
 
+  function loadLyrics(track, artist){
+    const msg = $('findMsg');
+    msg.textContent = 'Söz aranıyor…';
+    $('linesWrap').style.display = 'none';
+
+    const q = 'https://lrclib.net/api/search?track_name=' + encodeURIComponent(track || '')
+      + (artist ? '&artist_name=' + encodeURIComponent(artist) : '');
+
+    fetch(q)
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(list){
+        const hit = (list || []).find(function(x){ return x.plainLyrics; });
+        if(!hit){ msg.textContent = 'Sözü bulunamadı — elle yaz.'; return; }
+        const arr = hit.plainLyrics.split('\n')
+          .map(function(s){ return s.trim(); })
+          .filter(Boolean);
+        renderLines(arr);
+        msg.textContent = arr.length + ' satır bulundu, dokunarak seç.';
+      })
+      .catch(function(){
+        msg.textContent = 'Söz servisine bağlanılamadı — elle yaz.';
+      });
+  }
+
   $('findLyric').addEventListener('click', function(){
     const btn = this, msg = $('findMsg');
     const track = $('title').value.trim();
     const artist = $('artist').value.trim();
+    const term = (track + ' ' + artist).trim();
 
-    if(!track){ msg.textContent = 'Önce şarkı adını yaz.'; return; }
+    if(!term){ msg.textContent = 'Şarkı ya da sanatçı adı yaz.'; return; }
 
     btn.disabled = true;
     msg.textContent = 'Aranıyor…';
+    $('hitsWrap').style.display = 'none';
+    $('linesWrap').style.display = 'none';
 
-    if(!state.img){
-      findCover(track, artist, function(res){
-        if(!res) return;
-
-        // sanatci bos ise otomatik doldur
-        if(!$('artist').value.trim() && res.artist){
-          $('artist').value = res.artist;
-          state.artist = res.artist;
-          draw();
-        }
-        // sarki adini da servisteki resmi yazimla duzelt
-        if(res.track){
-          $('title').value = res.track;
-          state.title = res.track;
-          draw();
-        }
-        if(res.cover) applyCover(res.cover, msg);
-        findLink(res.id, res.track || track, res.artist || artist);
-      });
-    }
-
-    const q = 'https://lrclib.net/api/search?track_name=' + encodeURIComponent(track)
-      + (artist ? '&artist_name=' + encodeURIComponent(artist) : '');
-
-    fetch(q)
-      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function(list){
-        btn.disabled = false;
-        if(!list || !list.length){
-          msg.textContent = 'Bulunamadı — sözü elle yazman gerekiyor.';
-          $('linesWrap').style.display = 'none';
-          return;
-        }
-        const hit = list.find(function(x){ return x.plainLyrics; });
-        if(!hit){
-          msg.textContent = 'Kayıt var ama sözü yok. Elle yaz.';
-          $('linesWrap').style.display = 'none';
-          return;
-        }
-        const arr = hit.plainLyrics.split('\n')
-          .map(function(s){ return s.trim(); })
-          .filter(Boolean);
-        picked = [];
-        renderLines(arr);
-        msg.textContent = hit.artistName + ' — ' + hit.trackName + ' · ' + arr.length + ' satır';
-      })
-      .catch(function(){
-        btn.disabled = false;
-        msg.textContent = 'Bağlanamadı. İnternet yoksa ya da servis kapalıysa elle yaz.';
-      });
+    itunesSearch(term, function(list){
+      btn.disabled = false;
+      hits = list;
+      if(!list.length){
+        msg.textContent = 'Şarkı bulunamadı, söze bakılıyor…';
+        loadLyrics(track, artist);
+        return;
+      }
+      renderHits(list);
+      msg.textContent = list.length + ' sonuç — birini seç.';
+    });
   });
 
   $('copyLink').addEventListener('click', function(){

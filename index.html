@@ -520,7 +520,8 @@
       finish({
         cover: r.artworkUrl100 ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.') : null,
         artist: r.artistName || '',
-        track: r.trackName || ''
+        track: r.trackName || '',
+        id: r.trackId || null
       });
     };
 
@@ -530,6 +531,32 @@
       + '&entity=song&limit=1&callback=' + cb;
     document.head.appendChild(s);
     setTimeout(function(){ finish(null); }, 8000);
+  }
+
+  // --- sarki linki bulma: once Spotify, sonra YouTube Music ---
+  function findLink(id, track, artist){
+    const box = $('slink');
+    if(box.value.trim()) return;             // elle girdiyse dokunma
+
+    function fallback(){
+      box.value = 'https://open.spotify.com/search/'
+        + encodeURIComponent((artist ? artist + ' ' : '') + track);
+    }
+
+    if(!id){ fallback(); return; }
+
+    fetch('https://api.song.link/v1-alpha.1/links?platform=itunes&type=song&id='
+          + encodeURIComponent(id) + '&userCountry=TR')
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d){
+        const p = (d && d.linksByPlatform) || {};
+        const url = (p.spotify && p.spotify.url)
+                 || (p.youtubeMusic && p.youtubeMusic.url)
+                 || null;
+        if(url) box.value = url;
+        else fallback();
+      })
+      .catch(fallback);
   }
 
   function applyCover(url, msgEl){
@@ -606,6 +633,7 @@
           draw();
         }
         if(res.cover) applyCover(res.cover, msg);
+        findLink(res.id, res.track || track, res.artist || artist);
       });
     }
 

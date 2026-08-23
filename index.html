@@ -40,7 +40,7 @@
     background:var(--surface);border:1px solid var(--line);border-radius:18px;
     padding:12px;margin-bottom:18px;
   }
-  canvas{width:100%;height:auto;display:block;border-radius:10px}
+  canvas{width:100%;height:auto;display:block;border-radius:0}
 
   .field{margin-bottom:14px}
   label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;
@@ -199,6 +199,16 @@
   </div>
 
   <div class="field">
+    <label>Köşe yuvarlama</label>
+    <div class="segs" id="corner">
+      <button type="button" data-v="0" aria-pressed="true">Köşeli</button>
+      <button type="button" data-v="0.035" aria-pressed="false">Az</button>
+      <button type="button" data-v="0.07" aria-pressed="false">Orta</button>
+      <button type="button" data-v="0.13" aria-pressed="false">Çok</button>
+    </div>
+  </div>
+
+  <div class="field">
     <label>Renk</label>
     <div class="segs" id="mode">
       <button type="button" data-v="auto" aria-pressed="true">Kapaktan</button>
@@ -242,6 +252,7 @@
     img: null,
     fmt: 'square',
     mode: 'auto',
+    corner: '0',
     pick: '#1E5B47'
   };
 
@@ -371,6 +382,25 @@
     ctx.fillStyle = softFg;
     ctx.font = '600 '+(story?38:34)+'px '+FONT;
     ctx.fillText(state.artist || '', tx, fy + (story?78:66));
+
+    // secilen kose yuvarlakligi
+    const rad = Math.round(W * parseFloat(state.corner || 0));
+    if(rad > 0){
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-in';
+      rr(ctx, 0, 0, W, H, rad);
+      ctx.fillStyle = '#000';
+      ctx.fill();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    // onizleme kutusu da karttaki koseyle ayni gorunsun
+    cv.style.borderRadius = rad > 0
+      ? Math.round((cv.clientWidth || 0) * parseFloat(state.corner || 0)) + 'px'
+      : '0px';
   }
 
   /* ---------- events ---------- */
@@ -437,6 +467,7 @@
     });
   }
   seg('fmt','fmt');
+  seg('corner','corner');
   seg('mode','mode', function(){
     $('pickWrap').style.display = state.mode === 'custom' ? 'block' : 'none';
   });
@@ -566,10 +597,12 @@
     state.artist = $('artist').value;
     draw();
 
+    $('findMsg').textContent = 'Seçildi: ' + (r.trackName || '') + ' — ' + (r.artistName || '');
+
     if(r.artworkUrl100){
       applyCover(r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.'));
     }
-    findLink(r.trackViewUrl, r.trackName, r.artistName);
+    findLink(r.trackViewUrl, r.trackName, r.artistName, r.trackId);
     loadLyrics(r.trackName, r.artistName);
   }
 
@@ -596,27 +629,64 @@
   }
 
   // --- sarki linki: once Spotify, sonra YouTube Music ---
-  function findLink(appleUrl, track, artist){
-    const box = $('slink');
+  const linkCache = {};
 
-    function fallback(){
-      box.value = 'https://open.spotify.com/search/'
+  function findLink(appleUrl, track, artist, trackId){
+    const box = $('slink');
+    const key = appleUrl || trackId || '';
+
+    function searchUrl(){
+      return 'https://open.spotify.com/search/'
         + encodeURIComponent((artist ? artist + ' ' : '') + (track || ''));
     }
 
-    if(!appleUrl){ fallback(); return; }
+    if(linkCache[key]){ box.value = linkCache[key]; return; }
+    box.value = searchUrl();
+    if(!key) return;
 
-    fetch('https://api.song.link/v1-alpha.1/links?url='
-          + encodeURIComponent(appleUrl) + '&userCountry=TR')
-      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
-      .then(function(d){
-        const p = (d && d.linksByPlatform) || {};
-        const url = (p.spotify && p.spotify.url)
-                 || (p.youtubeMusic && p.youtubeMusic.url)
-                 || null;
-        if(url) box.value = url; else fallback();
-      })
-      .catch(fallback);
+    const urls = [];
+    if(appleUrl){
+      urls.push('https://api.song.link/v1-alpha.1/links?url='
+        + encodeURIComponent(appleUrl) + '&userCountry=TR');
+    }
+    if(trackId){
+      urls.push('https://api.song.link/v1-alpha.1/links?platform=itunes&type=song&id='
+        + encodeURIComponent(trackId) + '&userCountry=TR');
+    }
+
+    let attempt = 0;
+
+    function pick(d){
+      const p = (d && d.linksByPlatform) || {};
+      if(p.spotify && p.spotify.url) return p.spotify.url;
+      if(p.youtubeMusic && p.youtubeMusic.url) return p.youtubeMusic.url;
+      return null;
+    }
+
+    function tryNext(retried){
+      if(attempt >= urls.length) return;
+      const u = urls[attempt];
+
+      fetch(u)
+        .then(function(r){
+          if(r.status === 429 && !retried){
+            // kota dolduysa biraz bekleyip ayni adresi tekrar dene
+            setTimeout(function(){ tryNext(true); }, 3500);
+            return null;
+          }
+          if(!r.ok) return Promise.reject();
+          return r.json();
+        })
+        .then(function(d){
+          if(d === null) return;
+          const found = pick(d);
+          if(found){ linkCache[key] = found; box.value = found; }
+          else { attempt++; tryNext(false); }
+        })
+        .catch(function(){ attempt++; tryNext(false); });
+    }
+
+    tryNext(false);
   }
 
   // --- LRCLIB soz ---
